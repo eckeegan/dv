@@ -1194,14 +1194,12 @@ function goPage(p) { currentPage = p; renderTable(); window.scrollTo({top: docum
 function updateStats() {
   const filtered = getFilteredLangs();
   const total = filtered.reduce((s,[,v])=>s+v, 0);
-  const top = filtered.sort((a,b)=>b[1]-a[1])[0];
-  const topFmt = Object.entries(formatTotals).sort((a,b)=>b[1]-a[1])[0];
+  const top = filtered.slice().sort((a,b)=>b[1]-a[1])[0];
   document.getElementById('statTotal').textContent = fmt(total);
   document.getElementById('statLangs').textContent = filtered.length.toLocaleString();
   document.getElementById('statTop').textContent = top ? fmt(top[1]) : '—';
   document.getElementById('statTopLang').textContent = top ? top[0] : '—';
-  document.getElementById('statFormat').textContent = fmt(topFmt[1]);
-  document.getElementById('statFormatName').textContent = topFmt[0];
+  // Top Format is updated by updateDashboardCharts() to reflect filtered data
 }
 
 // ── SIZE FILTER ───────────────────────────────────────────────────────────────
@@ -1228,6 +1226,41 @@ function renderAll() {
   renderFormatGrid();
   renderTable();
   updateStats();
+  updateDashboardCharts();
+}
+
+function updateDashboardCharts() {
+  const filtered = getFilteredLangs();
+
+  // Update Top Languages bar chart with filtered data (top 20)
+  const top20 = filtered.sort((a,b) => b[1]-a[1]).slice(0, 20);
+  if (topLangChart) {
+    topLangChart.data.labels = top20.map(([l]) => l);
+    topLangChart.data.datasets[0].data = top20.map(([,v]) => v);
+    topLangChart.data.datasets[0].backgroundColor = top20.map((_,i) => `hsla(${20+i*5},70%,45%,0.85)`);
+    topLangChart.update();
+  }
+
+  // Update Format Totals doughnut with filtered data
+  const fmtTotals = {};
+  formatGroups.forEach(f => fmtTotals[f] = 0);
+  filtered.forEach(([lang]) => {
+    const lf = langFormat[lang] || {};
+    formatGroups.forEach(f => { fmtTotals[f] = (fmtTotals[f] || 0) + (lf[f] || 0); });
+  });
+  const fmtEntries = Object.entries(fmtTotals).sort((a,b) => b[1]-a[1]);
+  if (formatChart) {
+    formatChart.data.labels = fmtEntries.map(([k]) => k);
+    formatChart.data.datasets[0].data = fmtEntries.map(([,v]) => v);
+    formatChart.update();
+  }
+
+  // Update Top Format stat box to reflect filtered data
+  const topFmtFiltered = fmtEntries[0];
+  if (topFmtFiltered) {
+    document.getElementById('statFormat').textContent = fmt(topFmtFiltered[1]);
+    document.getElementById('statFormatName').textContent = topFmtFiltered[0];
+  }
 }
 
 // ── TAB SWITCHING ─────────────────────────────────────────────────────────────
@@ -1577,6 +1610,7 @@ function wireBubbleNButtons() {
 renderFormatFilters();
 renderAll();
 initCharts();
+updateDashboardCharts();
 setTimeout(initNR880Summary, 50);
 
 // Add tooltip div
